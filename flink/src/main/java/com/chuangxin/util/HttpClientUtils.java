@@ -1,5 +1,13 @@
 package com.chuangxin.util;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.chuangxin.bean.Ignore;
+import com.chuangxin.bean.api.PatentSearchExpressionPO;
+import com.squareup.okhttp.HttpUrl;
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -15,124 +23,56 @@ import org.apache.http.util.EntityUtils;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class HttpClientUtils {
-    public static String doGet(String url) {
-        return doGet(url, null);
-    }
-    public static String doGet(String url, Map<String, String> params) {
-        // 创建Httpclient对象
-        CloseableHttpClient httpclient = HttpClients.createDefault();
-        String result = "";
-        CloseableHttpResponse response = null;
-        try {
-            // 创建uri
-            URIBuilder builder = new URIBuilder(url);
-            if (params != null) {
-                for (String key : params.keySet()) {
-                    builder.addParameter(key, params.get(key));
-                }
-            }
-            URI uri = builder.build();
-            // 创建http GET请求
-            HttpGet httpGet = new HttpGet(uri);
-            // 执行请求
-            response = httpclient.execute(httpGet);
-            // 判断返回状态是否为200
-            if (response.getStatusLine().getStatusCode() == 200) {
-                result = EntityUtils.toString(response.getEntity(), "UTF-8");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                if (response != null) {
-                    response.close();
-                }
-                httpclient.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+    public static Response doGet(String url,Map<String, String> params) throws IOException {
+        OkHttpClient client = new OkHttpClient();
+        HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            urlBuilder.addQueryParameter(entry.getKey(), entry.getValue());
         }
-        return result;
-    }
-    public static String doPost(String url) {
-        return doPost(url, null);
-    }
-    public static String doPost(String url, Map<String, String> params) {
-        // 创建Httpclient对象
-        CloseableHttpClient httpClient = HttpClients.createDefault();
-        CloseableHttpResponse response = null;
-        String result = "";
-        try {
-            // 创建Http Post请求
-            HttpPost httpPost = new HttpPost(url);
-            // 创建参数列表
-            if (params != null) {
-                List<NameValuePair> paramList = new ArrayList<>();
-                for (String key : params.keySet()) {
-                    paramList.add(new BasicNameValuePair(key, params.get(key)));
-                }
-                // 模拟表单
-                UrlEncodedFormEntity entity = new UrlEncodedFormEntity(paramList,"utf-8");
-                httpPost.setEntity(entity);
-            }
-            // 执行http请求
-            response = httpClient.execute(httpPost);
-            result = EntityUtils.toString(response.getEntity(), "utf-8");
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                response.close();
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-        }
-        return result;
-    }
-    public static String doPostJson(String url, String json) {
-        // 创建Httpclient对象
-        CloseableHttpClient httpClient = HttpClients.createDefault();
-        CloseableHttpResponse response = null;
-        String result = "";
-        try {
-            // 创建Http Post请求
-            HttpPost httpPost = new HttpPost(url);
-            // 创建请求内容
-            StringEntity entity = new StringEntity(json.toString(),"UTF-8");//解决中文乱码问题
-            entity.setContentEncoding("UTF-8");
-            entity.setContentType("application/json");
-            httpPost.setEntity(entity);
-            // 执行http请求
-            response = httpClient.execute(httpPost);
-            result = EntityUtils.toString(response.getEntity(), "utf-8");
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                response.close();
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-        }
-        return result;
+        String fullURl = urlBuilder.build().toString();
+        Request request = new Request.Builder()
+                .url(fullURl)
+                .method("GET", null)
+                .addHeader("User-Agent", "Apifox/1.0.0 (https://apifox.com)")
+                .addHeader("Accept", "*/*")
+                .addHeader("Host", "114.251.8.193")
+                .addHeader("Connection", "keep-alive")
+                .build();
+        return client.newCall(request).execute();
     }
 
-//    public static void main(String[] args) {
+    public static Map<String, String> objectToMap(Object obj) throws IllegalAccessException {
+        Map<String, String> map = new HashMap<>();
+        Class<?> clazz = obj.getClass();
+        while (clazz != null) {
+            for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
+                field.setAccessible(true);
+                Object value = field.get(obj);
+                if (value != null && !field.isAnnotationPresent(Ignore.class)) {
+                    map.put(field.getName(), value.toString());
+                }
+            }
+            clazz = clazz.getSuperclass();
+        }
+        return map;
+    }
 
-//        String s = HttpClientUtils.doGet("http://localhost:8081/tUser/get/getList");
-//        System.out.println(s);
-//        User  u = new User();
-//        u.setId(12l);
-//        u.setName("flinksql");
-//        String s = JSON.toJSONString(u);
-//        System.out.println(s);
-//        String s1 = HttpClientUtils.doPostJson("http://192.168.1.109:8081/tUser/savedta", s);
-//        System.out.println(s1);
-//    }
+
+    public static void main(String[] args) throws IllegalAccessException, IOException {
+        PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
+        String url="http://114.251.8.193/api/patent/search/expression";
+        Response response = HttpClientUtils.doGet(url, HttpClientUtils.objectToMap(patentSearchExpressionPO));
+        String responseData = response.body().string();
+        JSONObject jsonObject = JSON.parseObject(responseData);
+        System.out.println(jsonObject);
+        System.out.println(response);
+//        PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
+//        Map<String, String> stringStringMap = HttpClientUtils.objectToMap(patentSearchExpressionPO);
+//        System.out.println(stringStringMap);
+    }
 }

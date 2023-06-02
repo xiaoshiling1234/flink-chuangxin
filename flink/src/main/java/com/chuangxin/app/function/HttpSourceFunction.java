@@ -3,6 +3,7 @@ package com.chuangxin.app.function;
 import com.chuangxin.util.HttpClientUtils;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -17,11 +18,11 @@ public abstract class HttpSourceFunction extends RichSourceFunction<String> {
 
     @Override
     public void run(SourceContext<String> sourceContext) throws Exception {
-        List<String> requestJsonList = getRequestJsonList();
-        requestJsonList.forEach(json->{
+        List<Map<String, String>> parametersList = getRequestParametersList();
+        parametersList.forEach(parameters->{
             //todo:成功失败的记录都应该存在数据库里，方便查询任务状态，以及重跑
             try {
-                sourceContext.collect(HttpClientUtils.doPostJson(url,json));
+                sourceContext.collect(HttpClientUtils.doGet(url,parameters).body().string());
             }catch (Exception e){
                 e.printStackTrace();
             }
@@ -37,5 +38,5 @@ public abstract class HttpSourceFunction extends RichSourceFunction<String> {
      * 推断所有需要执行的请求，这个接口不同只能自己实现
      * @return 请求的json请求体
      */
-    public abstract List<String> getRequestJsonList();
+    public abstract List<Map<String,String>> getRequestParametersList() throws IOException, IllegalAccessException;
 }

@@ -6,12 +6,15 @@ import com.chuangxin.app.function.HttpSourceFunction;
 import com.chuangxin.bean.api.PatentSearchExpressionPO;
 import com.chuangxin.util.DateTimeUtil;
 import com.chuangxin.util.HttpClientUtils;
+import com.squareup.okhttp.Response;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class PatentSearchExpression {
@@ -25,9 +28,9 @@ public class PatentSearchExpression {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         DataStreamSource<String> streamSource = env.addSource(new HttpSourceFunction("http://114.251.8.193/api/patent/search/expression") {
             @Override
-            public List<String> getRequestJsonList() {
+            public List<Map<String,String>> getRequestParametersList() throws IOException, IllegalAccessException {
                 // todo://请求失败和页数都需要保存在mysql里面
-                ArrayList<String> requestJsonList = new ArrayList<>();
+                ArrayList<Map<String,String>> requestJsonList = new ArrayList<>();
                 // 同一天,根据end_page决定要不要先请求一次接口获取总页数
                 if (Objects.equals(beginDate, endDate) && endPage == -1) {
                     PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
@@ -35,7 +38,7 @@ public class PatentSearchExpression {
                     int pageCount = getPageCount(url, patentSearchExpressionPO, beginDate);
                     for (int i = startPage; i <= pageCount; i++) {
                         patentSearchExpressionPO.setPage(String.valueOf(i));
-                        requestJsonList.add(JSON.toJSONString(patentSearchExpressionPO));
+                        requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
                     }
                 } else if (Objects.equals(beginDate, endDate) && endPage >= startPage) {
                     PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
@@ -44,7 +47,7 @@ public class PatentSearchExpression {
                     //取endPage和pageCount的较小者
                     for (int i = startPage; i <= Math.min(pageCount, endPage); i++) {
                         patentSearchExpressionPO.setPage(String.valueOf(i));
-                        requestJsonList.add(JSON.toJSONString(patentSearchExpressionPO));
+                        requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
                     }
                 } else if (Integer.parseInt(endDate) > Integer.parseInt(beginDate)) {
                     //对日期循环
@@ -55,7 +58,7 @@ public class PatentSearchExpression {
                         int pageCount = getPageCount(url, patentSearchExpressionPO, String.valueOf(i));
                         for (int j = 1; j <= pageCount; j++) {
                             patentSearchExpressionPO.setPage(String.valueOf(j));
-                            requestJsonList.add(JSON.toJSONString(patentSearchExpressionPO));
+                            requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
                         }
                     }
                 }
@@ -67,14 +70,16 @@ public class PatentSearchExpression {
         env.execute();
     }
 
-    public static int getPageCount(String url, PatentSearchExpressionPO patentSearchExpressionPO, String date) {
+    public static int getPageCount(String url, PatentSearchExpressionPO patentSearchExpressionPO, String date) throws IllegalAccessException, IOException {
         //这个接口需要增量拉取，所以增加时间筛选
         String newExpress = String.format(patentSearchExpressionPO.getExpress() + " AND 公布日=%s", date);
         patentSearchExpressionPO.setExpress(newExpress);
-        String result = HttpClientUtils.doPostJson(url, JSON.toJSONString(patentSearchExpressionPO));
-        JSONObject jsonObject = JSON.parseObject(result);
+        Response response = HttpClientUtils.doGet(url, HttpClientUtils.objectToMap(patentSearchExpressionPO));
+        String responseData = response.body().string();
+        JSONObject jsonObject = JSON.parseObject(responseData);
         int pageRow = Integer.parseInt(jsonObject.getString("page_row"));
         int total = Integer.parseInt(jsonObject.getString("total"));
+        System.out.println(total);
         return total / pageRow + 1;
     }
 } 
