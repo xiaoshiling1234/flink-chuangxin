@@ -16,4 +16,11 @@ public class GlobalConfig {
     public static final String API_CLIENT_ID="6caa041c0a0a01092042d2f59e8c7118";
     public static final String API_ACCESS_TOKEN="03635666-f281-4613-992e-b815b4689d03";
     public static final String API_SCOPE="read_cn";
+
+    public static final String MONGODB_URI="mongodb://sync:sync@fastsay.cn:27017/sync";
+    public static final String MONGODB_HOST="www.fastsay.cn";
+    public static final Integer MONGODB_PORT=27017;
+    public static final String MONGODB_SYNC_DBNAME="sync";
+    public static final String MONGODB_USERNAME="sync";
+    public static final String MONGODB_PASSWORD="sync";
 }

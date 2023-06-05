@@ -1,10 +1,12 @@
 package com.chuangxin.bean.api;
 
 
+import com.chuangxin.common.GlobalConfig;
+
 public class BaseApiPO {
-    String client_id="6caa041c0a0a01092042d2f59e8c7118";
-    String access_token="03635666-f281-4613-992e-b815b4689d03";
-    String scope="read_cn";
+    String client_id= GlobalConfig.API_CLIENT_ID;
+    String access_token=GlobalConfig.API_ACCESS_TOKEN;
+    String scope=GlobalConfig.API_SCOPE;
 
     public String getClient_id() {
         return client_id;

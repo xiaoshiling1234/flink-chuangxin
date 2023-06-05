@@ -8,8 +8,6 @@ import java.util.List;
 import java.util.Map;
 
 public abstract class HttpSourceFunction extends RichSourceFunction<String> {
-    private String json=null;
-    private Map<String, String> params=null;
     protected String url;
 
     public HttpSourceFunction(String url) {
@@ -20,11 +18,10 @@ public abstract class HttpSourceFunction extends RichSourceFunction<String> {
     public void run(SourceContext<String> sourceContext) throws Exception {
         List<Map<String, String>> parametersList = getRequestParametersList();
         parametersList.forEach(parameters->{
-            //todo:成功失败的记录都应该存在数据库里，方便查询任务状态，以及重跑
             try {
                 sourceContext.collect(HttpClientUtils.doGet(url,parameters).body().string());
-            }catch (Exception e){
-                e.printStackTrace();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         });
     }

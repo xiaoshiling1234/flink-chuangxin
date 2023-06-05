@@ -3,76 +3,61 @@ package com.chuangxin.app.sync.api;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.chuangxin.app.function.HttpSourceFunction;
+import com.chuangxin.app.function.MongoDBSink;
 import com.chuangxin.bean.api.PatentSearchExpressionPO;
-import com.chuangxin.util.DateTimeUtil;
+import com.chuangxin.bean.api.RangePO;
+import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.HttpClientUtils;
 import com.squareup.okhttp.Response;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.bson.Document;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public class PatentSearchExpression {
     public static void main(String[] args) throws Exception {
-        ParameterTool parameterTool = ParameterTool.fromArgs(args);
-        String beginDate = parameterTool.get("begin_date", DateTimeUtil.getYesterdayYMD());
-        String endDate = parameterTool.get("end_date", DateTimeUtil.getYesterdayYMD());
-        Integer startPage = parameterTool.getInt("start_page", 1);
-        Integer endPage = parameterTool.getInt("end_page", -1);
-
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        DataStreamSource<String> streamSource = env.addSource(new HttpSourceFunction("http://114.251.8.193/api/patent/search/expression") {
-            @Override
-            public List<Map<String,String>> getRequestParametersList() throws IOException, IllegalAccessException {
-                // todo://请求失败和页数都需要保存在mysql里面
-                ArrayList<Map<String,String>> requestJsonList = new ArrayList<>();
-                // 同一天,根据end_page决定要不要先请求一次接口获取总页数
-                if (Objects.equals(beginDate, endDate) && endPage == -1) {
-                    PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
-                    //这个会返回总页数，并且会更新表达式的日期限制
-                    int pageCount = getPageCount(url, patentSearchExpressionPO, beginDate);
-                    for (int i = startPage; i <= pageCount; i++) {
-                        patentSearchExpressionPO.setPage(String.valueOf(i));
-                        requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
-                    }
-                } else if (Objects.equals(beginDate, endDate) && endPage >= startPage) {
-                    PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
-                    //这个会返回总页数，并且会更新表达式的日期限制
-                    int pageCount = getPageCount(url, patentSearchExpressionPO, beginDate);
-                    //取endPage和pageCount的较小者
-                    for (int i = startPage; i <= Math.min(pageCount, endPage); i++) {
-                        patentSearchExpressionPO.setPage(String.valueOf(i));
-                        requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
-                    }
-                } else if (Integer.parseInt(endDate) > Integer.parseInt(beginDate)) {
-                    //对日期循环
-                    for (int i = Integer.parseInt(beginDate); i <= Integer.parseInt(endDate); i++) {
-                        PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
-                        //这个会返回总页数，并且会更新表达式的日期限制
-                        //这个接口需要增量拉取，所以增加时间筛选
-                        int pageCount = getPageCount(url, patentSearchExpressionPO, String.valueOf(i));
-                        for (int j = 1; j <= pageCount; j++) {
-                            patentSearchExpressionPO.setPage(String.valueOf(j));
-                            requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
-                        }
-                    }
-                }
-                System.out.println(requestJsonList);
-                return requestJsonList;
-            }
-        });
-        streamSource.print();
-        env.execute();
+        ParameterTool parameterTool = ParameterTool.fromArgs(args);
+        RangePO rangePO = new RangePO(parameterTool);
+        HttpSourceFunction sourceFunction = getSourceFunction(rangePO);
+        DataStreamSource<String> streamSource = env.addSource(sourceFunction);
+        DataStream<Document> documents = streamSource.map((MapFunction<String, Document>) Document::parse);
+        documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, "patent_search_expression"));
+        env.execute("FLINK-SYNC:PATENT_SEARCH_EXPRESSION");
     }
 
-    public static int getPageCount(String url, PatentSearchExpressionPO patentSearchExpressionPO, String date) throws IllegalAccessException, IOException {
+    private static HttpSourceFunction getSourceFunction(RangePO rangePO) {
+        return new HttpSourceFunction(GlobalConfig.BASH_URL + "/api/patent/search/expression") {
+            @Override
+            public List<Map<String, String>> getRequestParametersList() throws IllegalAccessException {
+                ArrayList<Map<String, String>> requestJsonList = new ArrayList<>();
+                PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
+                try {
+                    int pageCount = getPageCount(url, patentSearchExpressionPO, rangePO.getBeginDate(), rangePO.getEndDate());
+                    //更新结束页码,默认设置的一个很大的值
+                    rangePO.setEndPage(Math.min(pageCount, rangePO.getEndPage()));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                for (int i = rangePO.getStartPage(); i <= rangePO.getEndPage(); i++) {
+                    patentSearchExpressionPO.setPage(String.valueOf(i));
+                    requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
+                }
+                return requestJsonList;
+            }
+        };
+    }
+
+    public static int getPageCount(String url, PatentSearchExpressionPO patentSearchExpressionPO, String beginDate, String endDate) throws IllegalAccessException, IOException {
         //这个接口需要增量拉取，所以增加时间筛选
-        String newExpress = String.format(patentSearchExpressionPO.getExpress() + " AND 公布日=%s", date);
+        String newExpress = String.format(patentSearchExpressionPO.getExpress() + " AND (公布日=(%s TO %s))", beginDate, endDate);
         patentSearchExpressionPO.setExpress(newExpress);
         Response response = HttpClientUtils.doGet(url, HttpClientUtils.objectToMap(patentSearchExpressionPO));
         String responseData = response.body().string();
