@@ -1,6 +1,7 @@
 package com.chuangxin.app.sync.api;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.chuangxin.app.function.HttpSourceFunction;
 import com.chuangxin.app.function.MongoDBSink;
@@ -10,10 +11,13 @@ import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.HttpClientUtils;
 import com.squareup.okhttp.Response;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.util.Collector;
 import org.bson.Document;
 
 import java.io.IOException;
@@ -28,7 +32,17 @@ public class PatentSearchExpression {
         RangePO rangePO = new RangePO(parameterTool);
         HttpSourceFunction sourceFunction = getSourceFunction(rangePO);
         DataStreamSource<String> streamSource = env.addSource(sourceFunction);
-        DataStream<Document> documents = streamSource.map((MapFunction<String, Document>) Document::parse);
+        SingleOutputStreamOperator<String> recordsStream = streamSource.flatMap(
+                new RichFlatMapFunction<String, String>() {
+                    @Override
+                    public void flatMap(String s, Collector<String> collector) {
+                        JSONObject jsonObject = JSONObject.parseObject(s);
+                        JSONArray records = jsonObject.getJSONObject("context").getJSONArray("records");
+                        records.forEach(record -> collector.collect(record.toString()));
+                    }
+                }
+        );
+        DataStream<Document> documents = recordsStream.map((MapFunction<String, Document>) Document::parse);
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, "patent_search_expression"));
         env.execute("FLINK-SYNC:PATENT_SEARCH_EXPRESSION");
     }
