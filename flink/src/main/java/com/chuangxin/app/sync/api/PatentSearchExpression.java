@@ -9,6 +9,7 @@ import com.chuangxin.bean.api.PatentSearchExpressionPO;
 import com.chuangxin.bean.api.RangePO;
 import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.HttpClientUtils;
+import com.chuangxin.util.ObjectUtil;
 import com.squareup.okhttp.Response;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
@@ -62,7 +63,7 @@ public class PatentSearchExpression {
                 }
                 for (int i = rangePO.getStartPage(); i <= rangePO.getEndPage(); i++) {
                     patentSearchExpressionPO.setPage(String.valueOf(i));
-                    requestJsonList.add(HttpClientUtils.objectToMap(patentSearchExpressionPO));
+                    requestJsonList.add(ObjectUtil.objectToMap(patentSearchExpressionPO));
                 }
                 return requestJsonList;
             }
@@ -73,7 +74,7 @@ public class PatentSearchExpression {
         //这个接口需要增量拉取，所以增加时间筛选
         String newExpress = String.format(patentSearchExpressionPO.getExpress() + " AND (公布日=(%s TO %s))", beginDate, endDate);
         patentSearchExpressionPO.setExpress(newExpress);
-        Response response = HttpClientUtils.doGet(url, HttpClientUtils.objectToMap(patentSearchExpressionPO));
+        Response response = HttpClientUtils.doGet(url, ObjectUtil.objectToMap(patentSearchExpressionPO));
         String responseData = response.body().string();
         JSONObject jsonObject = JSON.parseObject(responseData);
         int pageRow = Integer.parseInt(jsonObject.getString("page_row"));
