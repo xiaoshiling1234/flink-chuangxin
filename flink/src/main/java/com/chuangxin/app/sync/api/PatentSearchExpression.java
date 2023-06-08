@@ -11,6 +11,7 @@ import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.HttpClientUtils;
 import com.chuangxin.util.ObjectUtil;
 import com.squareup.okhttp.Response;
+import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.java.utils.ParameterTool;

@@ -1,13 +1,11 @@
 package com.chuangxin.util;
 
-import com.chuangxin.bean.Ignore;
 import com.squareup.okhttp.HttpUrl;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 public class HttpClientUtils {
