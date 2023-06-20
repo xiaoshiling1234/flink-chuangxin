@@ -17,9 +17,10 @@ public abstract class HttpSourceFunction extends RichSourceFunction<String> {
     @Override
     public void run(SourceContext<String> sourceContext) throws Exception {
         List<Map<String, String>> parametersList = getRequestParametersList();
-        parametersList.forEach(parameters->{
+        parametersList.forEach(parameters -> {
             try {
-                sourceContext.collect(HttpClientUtils.doGet(url,parameters).body().string());
+                System.out.println("当前正在同步第" + parameters.get("page").toString() + "页数据");
+                sourceContext.collect(HttpClientUtils.doGet(url, parameters).body().string());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -33,7 +34,8 @@ public abstract class HttpSourceFunction extends RichSourceFunction<String> {
 
     /**
      * 推断所有需要执行的请求，这个接口不同只能自己实现
+     *
      * @return 请求的json请求体
      */
-    public abstract List<Map<String,String>> getRequestParametersList() throws IOException, IllegalAccessException;
+    public abstract List<Map<String, String>> getRequestParametersList() throws IOException, IllegalAccessException;
 }

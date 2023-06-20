@@ -17,8 +17,12 @@ public class DateTimeUtil {
         return new SimpleDateFormat("yyyyMMdd").format(cal.getTime());
     }
 
-    public static void main(String[] args) {
-        System.out.println(getYesterdayYMD());
+    public static String convertDateFormat(String inputDateString) {
+        DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+        LocalDateTime dateTime = LocalDateTime.parse(inputDateString, inputFormatter);
+
+        DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        return dateTime.format(outputFormatter);
     }
 }
 

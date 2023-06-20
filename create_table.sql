@@ -1,9 +1,16 @@
-CREATE TABLE request_history (
-  task_id INT AUTO_INCREMENT PRIMARY KEY,
-  url VARCHAR(255) NOT NULL,
-  task_parameters TEXT,
-  status INT NOT NULL DEFAULT 0,
-  error_info TEXT,
+CREATE TABLE chuangxin.token (
+  access_token VARCHAR(255),
+  token_type VARCHAR(255),
+  refresh_token VARCHAR(255),
+  expires_in INT,
+  scope VARCHAR(255),
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+);
+
+CREATE TABLE chuangxin.task (
+  task_type VARCHAR(255),
+  max_pd VARCHAR(255),
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

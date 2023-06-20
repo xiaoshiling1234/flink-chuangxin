@@ -1,68 +1,74 @@
 package com.chuangxin.app.sync.api;
 
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.chuangxin.app.function.ExpressionRichFlatMapFunction;
 import com.chuangxin.app.function.HttpSourceFunction;
 import com.chuangxin.app.function.MongoDBSink;
 import com.chuangxin.bean.api.PatentSearchExpressionPO;
-import com.chuangxin.bean.api.RangePO;
 import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.HttpClientUtils;
+import com.chuangxin.util.MysqlUtil;
 import com.chuangxin.util.ObjectUtil;
 import com.squareup.okhttp.Response;
-import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.common.functions.RichFlatMapFunction;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.util.Collector;
 import org.bson.Document;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class PatentSearchExpression {
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        env.setParallelism(1);
         ParameterTool parameterTool = ParameterTool.fromArgs(args);
-        RangePO rangePO = new RangePO(parameterTool);
-        HttpSourceFunction sourceFunction = getSourceFunction(rangePO);
+        String maxPD = parameterTool.get("maxPD");
+        //优先从参数获取，然后查库，然后使用默认参数
+        if (maxPD != null) {
+        } else if (getMaxPD() != null) {
+            maxPD = getMaxPD();
+        } else {
+            maxPD = GlobalConfig.API_DEFAULT_PD;
+        }
+        System.out.println("当前发布日:" + maxPD);
+
+        HttpSourceFunction sourceFunction = getSourceFunction(maxPD);
         DataStreamSource<String> streamSource = env.addSource(sourceFunction);
-        SingleOutputStreamOperator<String> recordsStream = streamSource.flatMap(
-                new RichFlatMapFunction<String, String>() {
-                    @Override
-                    public void flatMap(String s, Collector<String> collector) {
-                        JSONObject jsonObject = JSONObject.parseObject(s);
-                        JSONArray records = jsonObject.getJSONObject("context").getJSONArray("records");
-                        records.forEach(record -> collector.collect(record.toString()));
-                    }
-                }
-        );
+        //为了使用状态增加虚拟keyby
+        KeyedStream<String, Object> keyedStream = streamSource.keyBy((KeySelector<String, Object>) value -> "dummyKey");
+        SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new ExpressionRichFlatMapFunction());
+
         DataStream<Document> documents = recordsStream.map((MapFunction<String, Document>) Document::parse);
-        documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, "patent_search_expression"));
+
+        documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, "FLINK-SYNC:PATENT_SEARCH_EXPRESSION"));
         env.execute("FLINK-SYNC:PATENT_SEARCH_EXPRESSION");
     }
 
-    private static HttpSourceFunction getSourceFunction(RangePO rangePO) {
-        return new HttpSourceFunction(GlobalConfig.BASH_URL + "/api/patent/search/expression") {
+    private static String getMaxPD() {
+        List<Map<String, Object>> query = MysqlUtil.query("SELECT * from task where task_type='FLINK-SYNC:PATENT_SEARCH_EXPRESSION'");
+        return query.size() == 0 ? null : query.get(0).get("max_pd").toString();
+    }
+
+    private static HttpSourceFunction getSourceFunction(String maxDt) {
+        return new HttpSourceFunction(GlobalConfig.API_BASH_URL + "/api/patent/search/expression") {
             @Override
-            public List<Map<String, String>> getRequestParametersList() throws IllegalAccessException {
+            public List<Map<String, String>> getRequestParametersList() throws IllegalAccessException, IOException {
                 ArrayList<Map<String, String>> requestJsonList = new ArrayList<>();
                 PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
-                try {
-                    int pageCount = getPageCount(url, patentSearchExpressionPO, rangePO.getBeginDate(), rangePO.getEndDate());
-                    //更新结束页码,默认设置的一个很大的值
-                    rangePO.setEndPage(Math.min(pageCount, rangePO.getEndPage()));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                for (int i = rangePO.getStartPage(); i <= rangePO.getEndPage(); i++) {
+
+                int pageCount = getPageCountAndUpdateExpression(url, patentSearchExpressionPO, maxDt);
+                System.out.println("分页数为:" + pageCount);
+                for (int i = 1; i <= pageCount; i++) {
                     patentSearchExpressionPO.setPage(String.valueOf(i));
                     requestJsonList.add(ObjectUtil.objectToMap(patentSearchExpressionPO));
                 }
@@ -71,18 +77,22 @@ public class PatentSearchExpression {
         };
     }
 
-    public static int getPageCount(String url, PatentSearchExpressionPO patentSearchExpressionPO, String beginDate, String endDate) throws IllegalAccessException, IOException {
+    public static int getPageCountAndUpdateExpression(String url, PatentSearchExpressionPO patentSearchExpressionPO, String maxDt) throws IllegalAccessException, IOException {
         //这个接口需要增量拉取，所以增加时间筛选
-        String newExpress = String.format(patentSearchExpressionPO.getExpress() + " AND (公布日=(%s TO %s))", beginDate, endDate);
-        patentSearchExpressionPO.setExpress(newExpress);
+        String express = String.format(patentSearchExpressionPO.getExpress() + " AND (公布日>%s)", maxDt);
+        patentSearchExpressionPO.setExpress(express);
         Response response = HttpClientUtils.doGet(url, ObjectUtil.objectToMap(patentSearchExpressionPO));
         String responseData = response.body().string();
         JSONObject jsonObject = JSON.parseObject(responseData);
+        if (Objects.equals(jsonObject.getString("total"), "")) {
+            return 0;
+        }
         int pageRow = Integer.parseInt(jsonObject.getString("page_row"));
         int total = Integer.parseInt(jsonObject.getString("total"));
-        System.out.println(total);
+        System.out.println("数据总条数:" + total);
         return total / pageRow + 1;
     }
+
 } 
 
 
