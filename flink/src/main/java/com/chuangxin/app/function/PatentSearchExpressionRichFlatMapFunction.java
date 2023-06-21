@@ -14,8 +14,8 @@ import java.util.HashMap;
 
 import static com.chuangxin.util.DateTimeUtil.convertDateFormat;
 
-public class ExpressionRichFlatMapFunction extends RichFlatMapFunction<String, String> {
-    private ValueState<String> maxPdState;
+public class PatentSearchExpressionRichFlatMapFunction extends RichFlatMapFunction<String, String> {
+    private ValueState<String> maxDtState;
 
     @Override
     public void open(Configuration parameters) {
@@ -24,15 +24,15 @@ public class ExpressionRichFlatMapFunction extends RichFlatMapFunction<String, S
                 "maxDtState",
                 String.class
         );
-        maxPdState = getRuntimeContext().getState(descriptor);
+        maxDtState = getRuntimeContext().getState(descriptor);
     }
 
     @Override
     public void close() {
         try {
             HashMap<String, Object> updateInfo = new HashMap<>();
-            updateInfo.put("max_pd", maxPdState.value());
-            MysqlUtil.update("task", updateInfo, "task_type='FLINK-SYNC:PATENT_SEARCH_EXPRESSION'");
+            updateInfo.put("max_pd", maxDtState.value());
+            MysqlUtil.update("task", updateInfo, "1=1");
         } catch (Exception ignored) {
         }
         System.out.println("任务结束");
@@ -47,13 +47,13 @@ public class ExpressionRichFlatMapFunction extends RichFlatMapFunction<String, S
             String pdFormat = convertDateFormat(pd);
 
             try {
-                if (maxPdState.value() == null) {
-                    maxPdState.update(pdFormat);
+                if (maxDtState.value() == null) {
+                    maxDtState.update(pdFormat);
                     System.out.println("最大发布时间已更新为:" + pdFormat);
                 } else {
-                    String currentMaxPd = maxPdState.value();
-                    if (pdFormat.compareTo(currentMaxPd) > 0) {
-                        maxPdState.update(pdFormat);
+                    String currentMaxDt = maxDtState.value();
+                    if (pdFormat.compareTo(currentMaxDt) > 0) {
+                        maxDtState.update(pdFormat);
                         System.out.println("最大发布时间已更新为:" + pdFormat);
                     }
                 }

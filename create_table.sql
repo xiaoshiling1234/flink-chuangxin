@@ -9,8 +9,8 @@ CREATE TABLE chuangxin.token (
 );
 
 CREATE TABLE chuangxin.task (
-  task_type VARCHAR(255),
-  max_pd VARCHAR(255),
+  max_pd VARCHAR(255) comment '最大公布日',
+  max_ilsad VARCHAR(255) comment '最大法律公告日',
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

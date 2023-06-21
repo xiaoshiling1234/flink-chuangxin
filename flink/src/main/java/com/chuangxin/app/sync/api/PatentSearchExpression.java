@@ -2,7 +2,7 @@ package com.chuangxin.app.sync.api;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.chuangxin.app.function.ExpressionRichFlatMapFunction;
+import com.chuangxin.app.function.PatentSearchExpressionRichFlatMapFunction;
 import com.chuangxin.app.function.HttpSourceFunction;
 import com.chuangxin.app.function.MongoDBSink;
 import com.chuangxin.bean.api.PatentSearchExpressionPO;
@@ -19,7 +19,6 @@ import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
 import org.apache.flink.connector.jdbc.JdbcSink;
 import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.bson.Document;
 
 import java.io.IOException;
@@ -33,7 +32,7 @@ public class PatentSearchExpression {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
         ParameterTool parameterTool = ParameterTool.fromArgs(args);
-        String maxPD = parameterTool.get("maxPD");
+        String maxPD = parameterTool.get("max_pd");
         //优先从参数获取，然后查库，然后使用默认参数
         if (maxPD != null) {
         } else if (getMaxPD() != null) {
@@ -47,7 +46,7 @@ public class PatentSearchExpression {
         DataStreamSource<String> streamSource = env.addSource(sourceFunction);
         //为了使用状态增加虚拟keyby
         KeyedStream<String, Object> keyedStream = streamSource.keyBy((KeySelector<String, Object>) value -> "dummyKey");
-        SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new ExpressionRichFlatMapFunction());
+        SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new PatentSearchExpressionRichFlatMapFunction());
 
         DataStream<Document> documents = recordsStream.map((MapFunction<String, Document>) Document::parse);
         //写入子任务
@@ -79,7 +78,7 @@ public class PatentSearchExpression {
     }
 
     private static String getMaxPD() {
-        List<Map<String, Object>> query = MysqlUtil.query("SELECT * from task where task_type='FLINK-SYNC:PATENT_SEARCH_EXPRESSION'");
+        List<Map<String, Object>> query = MysqlUtil.query("SELECT * from task");
         return query.size() == 0 ? null : query.get(0).get("max_pd").toString();
     }
 
@@ -103,7 +102,8 @@ public class PatentSearchExpression {
 
     public static int getPageCountAndUpdateExpression(String url, PatentSearchExpressionPO patentSearchExpressionPO, String maxDt) throws IllegalAccessException, IOException {
         //这个接口需要增量拉取，所以增加时间筛选
-        String express = String.format(patentSearchExpressionPO.getExpress() + " AND (公布日>%s)", maxDt);
+        //使用大于等于预防一次拉不玩的情况
+        String express = String.format(patentSearchExpressionPO.getExpress() + " AND (公布日>=%s)", maxDt);
         patentSearchExpressionPO.setExpress(express);
         Response response = HttpClientUtils.doGet(url, ObjectUtil.objectToMap(patentSearchExpressionPO));
         String responseData = response.body().string();

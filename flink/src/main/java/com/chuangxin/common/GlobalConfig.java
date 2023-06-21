@@ -28,6 +28,8 @@ public class GlobalConfig {
     public static final String API_SCOPE="read_cn";
     public static final String API_SECRET="6caa041d0a0a01092042d2f593a602ba";
     //默认公布日
-    public static final String API_DEFAULT_PD="202301";
+    public static final String API_DEFAULT_PD="202305";
+    //默认法律公告日
+    public static final String API_DEFAULT_ILSAD="202305";
 
 }
