@@ -19,7 +19,6 @@ public abstract class HttpSourceFunction extends RichSourceFunction<String> {
         List<Map<String, String>> parametersList = getRequestParametersList();
         parametersList.forEach(parameters -> {
             try {
-                System.out.println("当前正在同步第" + parameters.get("page").toString() + "页数据");
                 sourceContext.collect(HttpClientUtils.doGet(url, parameters).body().string());
             } catch (IOException e) {
                 throw new RuntimeException(e);
