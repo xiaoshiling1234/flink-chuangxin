@@ -9,11 +9,16 @@ CREATE TABLE chuangxin.token (
 );
 
 CREATE TABLE chuangxin.task (
-  max_pd VARCHAR(255) comment '最大公布日',
-  max_ilsad VARCHAR(255) comment '最大法律公告日',
+  task_name VARCHAR(255) comment '任务名称',
+  max_dt VARCHAR(255) comment '最大公布日',
+  inc_col VARCHAR(255) comment '增量字段',
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+insert into task (task_name,max_dt,inc_col) values('FLINK-SYNC:PATENT_SEARCH_EXPRESSION','20230601','公布日')
+,('FLINK-SYNC:PATENT_LAW_STATUS_SEARCH_EXPRESSION','20230601','公布日')
+,('FLINK-SYNC:PATENT_LAW_RECORD_STATUS_SEARCH_EXPRESSION','20230601','法律公告日');
 
 CREATE TABLE chuangxin.sub_task (
   pid VARCHAR(255) comment '专利编码',

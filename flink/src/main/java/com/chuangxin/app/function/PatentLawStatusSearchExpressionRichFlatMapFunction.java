@@ -35,8 +35,8 @@ public class PatentLawStatusSearchExpressionRichFlatMapFunction extends RichFlat
     public void close() {
         try {
             HashMap<String, Object> updateInfo = new HashMap<>();
-            updateInfo.put("max_ilsad", maxDtState.value());
-            MysqlUtil.update("task", updateInfo, "1=1");
+            updateInfo.put("max_dt", maxDtState.value());
+            MysqlUtil.update("task", updateInfo, "task_name='FLINK-SYNC:PATENT_LAW_STATUS_SEARCH_EXPRESSION'");
         } catch (Exception ignored) {
         }
         System.out.println("任务结束");
@@ -47,30 +47,18 @@ public class PatentLawStatusSearchExpressionRichFlatMapFunction extends RichFlat
         JSONObject jsonObject = JSONObject.parseObject(s);
         JSONArray records = jsonObject.getJSONObject("context").getJSONArray("records");
         records.forEach(record -> {
-            String ilsadHistory = JSONObject.parseObject(record.toString()).getString("ilsad");
-            String[] split = ilsadHistory.split(";");
-            String ilsad="";
-            for (String s1 : split) {
-                if (ilsad.equals("")){
-                    ilsad=s1;
-                }else {
-                    if (s1.compareTo(ilsad)>0){
-                        ilsad=s1;
-                    }
-                }
-            }
-
-            String ilsadFormat = convertDateFormat(ilsad);
+            String pd = JSONObject.parseObject(record.toString()).getString("pd");
+            String pdFormat = convertDateFormat(pd);
 
             try {
                 if (maxDtState.value() == null) {
-                    maxDtState.update(ilsadFormat);
-                    System.out.println("最大法律公告日已更新为:" + ilsadFormat);
+                    maxDtState.update(pdFormat);
+                    System.out.println("最大发布时间已更新为:" + pdFormat);
                 } else {
                     String currentMaxDt = maxDtState.value();
-                    if (ilsadFormat.compareTo(currentMaxDt) > 0) {
-                        maxDtState.update(ilsadFormat);
-                        System.out.println("最大法律公告日已更新为:" + ilsadFormat);
+                    if (pdFormat.compareTo(currentMaxDt) > 0) {
+                        maxDtState.update(pdFormat);
+                        System.out.println("最大发布时间已更新为:" + pdFormat);
                     }
                 }
                 collector.collect(record.toString());
