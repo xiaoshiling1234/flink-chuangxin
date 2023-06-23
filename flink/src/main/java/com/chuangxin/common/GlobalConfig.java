@@ -18,7 +18,7 @@ public class GlobalConfig {
     /**
      * MONGODB配置
      */
-    public static final String MONGODB_URI="mongodb://sync:sync@fastsay.cn:27017/sync";
+    public static final String MONGODB_URI="mongodb://sync:sync333214124121@fastsay.cn:27017/sync";
     public static final String MONGODB_SYNC_DBNAME="sync";
     /**
      * DI开放平台配置
