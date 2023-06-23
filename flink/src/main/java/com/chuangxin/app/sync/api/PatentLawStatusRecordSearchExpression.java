@@ -14,6 +14,7 @@ import com.chuangxin.util.ObjectUtil;
 import com.squareup.okhttp.Response;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -42,11 +43,11 @@ public class PatentLawStatusRecordSearchExpression {
         env.setParallelism(1);
         System.out.println("当前法律公告日:" + context.maxDt);
         HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/lawStatusRecordSearch/expression", new PatentLawStatusPO());
-        DataStreamSource<String> streamSource = env.addSource(sourceFunction);
+        DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
         //为了使用状态增加虚拟keyby
-        KeyedStream<String, Object> keyedStream = streamSource.keyBy((KeySelector<String, Object>) value -> "dummyKey");
+        KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
+        ;
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new PatentLawRecordStatusSearchExpressionRichFlatMapFunction());
-
         DataStream<Document> documents = recordsStream.map((MapFunction<String, Document>) Document::parse);
         //写入mongoDB
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName));
