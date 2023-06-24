@@ -23,16 +23,15 @@ insert into task (task_name,max_dt,inc_cn,inc_col) values
 ,('FLINK-SYNC:PATENT_LAW_RECORD_STATUS_SEARCH_EXPRESSION','20230601','法律公告日','ilsad')
 ,('FLINK-SYNC:PATENT_TRANSFER_SEARCH_EXPRESSION','20230601','公布日','pd')
 ,('FLINK-SYNC:PATENT_TRANSFER_RECORD_SEARCH_EXPRESSION','20230601','授权公布日','pdq')
-,('FLINK-SYNC:PATENT_PLEDGE_SEARCH_EXPRESSION','20230601','公布日','pd');
+,('FLINK-SYNC:PATENT_PLEDGE_SEARCH_EXPRESSION','20230601','公布日','pd')
+,('FLINK-SYNC:PATENT_PLEDGE_RECORD_SEARCH_EXPRESSION','20230101','生效日期','ppedd')
+,('FLINK-SYNC:PATENT_PERMIT_SEARCH_EXPRESSION','20220101','公布日','pd')
+,('FLINK-SYNC:PATENT_PERMIT_RECORD_SEARCH_EXPRESSION','20220101','合同备案日期','crdd');
 
 CREATE TABLE chuangxin.sub_task (
   pid VARCHAR(255) comment '专利编码',
   pno VARCHAR(255) comment '公布号原始',
   patent_detail_status INT DEFAULT 0 comment '专利详情同步状态：0否1是',
-  transfer_status INT DEFAULT 0 comment '转让信息同步状态：0否1是',
-  pledge_status INT DEFAULT 0 comment '质押信息同步状态：0否1是',
-  license_status INT DEFAULT 0 comment '许可信息同步状态：0否1是',
-  legal_status INT DEFAULT 0 comment '法律状态同步状态：0否1是',
   legal_detail_status INT DEFAULT 0 comment '法律状态明细同步状态：0否1是',
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
