@@ -1,8 +1,8 @@
 package com.chuangxin.app.sync.api;
 
+import com.chuangxin.app.function.BaseExpressionRichFlatMapFunction;
 import com.chuangxin.app.function.HttpSourceFunction;
 import com.chuangxin.app.function.MongoDBSink;
-import com.chuangxin.app.function.PatentSearchExpressionRichFlatMapFunction;
 import com.chuangxin.bean.api.PatentSearchExpressionPO;
 import com.chuangxin.common.GlobalConfig;
 import org.apache.flink.api.common.functions.MapFunction;
@@ -25,12 +25,14 @@ public class PatentSearchExpression {
         BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
-        System.out.println("当前发布日:" + context.maxDt);
-        HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/search/expression", new PatentSearchExpressionPO());
+        System.out.printf("当前%s:%s%n",context.incCn,context.maxDt);
+        PatentSearchExpressionPO patentSearchExpressionPO = new PatentSearchExpressionPO();
+        patentSearchExpressionPO.setSort_column("+"+context.incCol.toUpperCase());
+        HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/search/expression", patentSearchExpressionPO);
         DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
 
-        SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new PatentSearchExpressionRichFlatMapFunction());
+        SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
 
         DataStream<Document> documents = recordsStream.map((MapFunction<String, Document>) Document::parse);
         //写入子任务

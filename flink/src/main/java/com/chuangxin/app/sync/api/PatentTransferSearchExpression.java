@@ -1,9 +1,9 @@
 package com.chuangxin.app.sync.api;
 
+import com.chuangxin.app.function.BaseExpressionRichFlatMapFunction;
 import com.chuangxin.app.function.HttpSourceFunction;
 import com.chuangxin.app.function.MongoDBSink;
-import com.chuangxin.app.function.PatentTransferSearchExpressionRichFlatMapFunction;
-import com.chuangxin.bean.api.PatentTransferSearchPO;
+import com.chuangxin.bean.api.BasePageExpressPO;
 import com.chuangxin.common.GlobalConfig;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -22,12 +22,12 @@ public class PatentTransferSearchExpression {
         BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_TRANSFER_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
-        System.out.println("当前发布日:" + context.maxDt);
-        PatentTransferSearchPO patentTransferSearchPO = new PatentTransferSearchPO();
-        HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/transferSearch/expression", patentTransferSearchPO);
+        System.out.printf("当前%s:%s%n",context.incCn,context.maxDt);
+        BasePageExpressPO basePageExpressPO = new BasePageExpressPO(context.incCol);
+        HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/transferSearch/expression", basePageExpressPO);
         DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
-        SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new PatentTransferSearchExpressionRichFlatMapFunction());
+        SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
 
         DataStream<Document> documents = recordsStream.map((MapFunction<String, Document>) Document::parse);
         //写入mongoDB

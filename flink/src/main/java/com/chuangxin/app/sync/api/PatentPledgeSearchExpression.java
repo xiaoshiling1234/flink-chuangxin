@@ -17,14 +17,14 @@ import org.bson.Document;
 
 import java.util.Map;
 
-public class PatentLawStatusSearchExpression {
+public class PatentPledgeSearchExpression {
     public static void main(String[] args) throws Exception {
-        BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_LAW_STATUS_SEARCH_EXPRESSION");
+        BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_PLEDGE_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
         System.out.printf("当前%s:%s%n",context.incCn,context.maxDt);
         BasePageExpressPO basePageExpressPO = new BasePageExpressPO(context.incCol);
-        HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/lawStatusSearch/expression", basePageExpressPO);
+        HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/pledgeSearch/expression", basePageExpressPO);
         DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));

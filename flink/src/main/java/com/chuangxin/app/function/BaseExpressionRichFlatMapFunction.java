@@ -2,6 +2,7 @@ package com.chuangxin.app.function;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.chuangxin.app.sync.api.BaseExpressionContext;
 import com.chuangxin.util.MysqlUtil;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.common.state.ValueState;
@@ -14,8 +15,13 @@ import java.util.HashMap;
 
 import static com.chuangxin.util.DateTimeUtil.convertDateFormat;
 
-public class PatentSearchExpressionRichFlatMapFunction extends RichFlatMapFunction<String, String> {
+public class BaseExpressionRichFlatMapFunction extends RichFlatMapFunction<String, String> {
     private ValueState<String> maxDtState;
+    private final BaseExpressionContext context;
+
+    public BaseExpressionRichFlatMapFunction(BaseExpressionContext context) {
+        this.context=context;
+    }
 
     @Override
     public void open(Configuration parameters) {
@@ -32,7 +38,7 @@ public class PatentSearchExpressionRichFlatMapFunction extends RichFlatMapFuncti
         try {
             HashMap<String, Object> updateInfo = new HashMap<>();
             updateInfo.put("max_dt", maxDtState.value());
-            MysqlUtil.update("task", updateInfo, "task_name='FLINK-SYNC:PATENT_SEARCH_EXPRESSION'");
+            MysqlUtil.update("task", updateInfo, String.format("task_name='%s'",context.getTaskName()));
         } catch (Exception ignored) {
 
         }
@@ -44,18 +50,18 @@ public class PatentSearchExpressionRichFlatMapFunction extends RichFlatMapFuncti
         JSONObject jsonObject = JSONObject.parseObject(s);
         JSONArray records = jsonObject.getJSONObject("context").getJSONArray("records");
         records.forEach(record -> {
-            String pd = JSONObject.parseObject(record.toString()).getString("pd");
+            String pd = JSONObject.parseObject(record.toString()).getString(context.getIncCol());
             String pdFormat = convertDateFormat(pd);
 
             try {
                 if (maxDtState.value() == null) {
                     maxDtState.update(pdFormat);
-                    System.out.println("最大发布时间已更新为:" + pdFormat);
+                    System.out.printf("最大%s已更新为:%s%n",context.getIncCn(),pdFormat);
                 } else {
                     String currentMaxDt = maxDtState.value();
                     if (pdFormat.compareTo(currentMaxDt) > 0) {
                         maxDtState.update(pdFormat);
-                        System.out.println("最大发布时间已更新为:" + pdFormat);
+                        System.out.printf("最大%s已更新为:%s%n",context.getIncCn(),pdFormat);
                     }
                 }
                 collector.collect(record.toString());

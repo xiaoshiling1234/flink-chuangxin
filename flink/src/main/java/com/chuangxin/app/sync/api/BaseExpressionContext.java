@@ -9,7 +9,7 @@ import com.chuangxin.util.HttpClientUtils;
 import com.chuangxin.util.MysqlUtil;
 import com.chuangxin.util.ObjectUtil;
 import com.squareup.okhttp.Response;
-import org.apache.flink.api.java.tuple.Tuple2;
+import lombok.Data;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -18,29 +18,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+@Data
 public class BaseExpressionContext implements Serializable {
     String taskName;
     String maxDt;
+    String incCn;
     String incCol;
 
     public BaseExpressionContext(String taskName) {
         this.taskName = taskName;
-        Tuple2<String, String> incInfo = getIncInfo();
-        this.maxDt = incInfo.f0;
-        this.incCol = incInfo.f1;
+        Map<String, Object> incInfo = getIncInfo();
+        this.maxDt = incInfo.get("max_dt").toString();
+        this.incCn = incInfo.get("inc_cn").toString();
+        this.incCol = incInfo.get("inc_col").toString();
     }
 
-    private Tuple2<String, String> getIncInfo() {
+    private Map<String, Object> getIncInfo() {
         String sql = String.format("SELECT * from task where  task_name='%s'", taskName);
-        List<Map<String, Object>> query = MysqlUtil.query(sql);
-        return new Tuple2<>(query.get(0).get("max_dt").toString(), query.get(0).get("inc_col").toString());
+        return MysqlUtil.query(sql).get(0);
     }
 
     private int getPageCountAndUpdateExpression(String url, BasePageExpressPO basePageExpressPO) throws IllegalAccessException, IOException {
         //这个接口需要增量拉取，所以增加时间筛选
         //使用大于等于预防一次拉不玩的情况
-        String express = String.format("%s AND (%s>=%s)", basePageExpressPO.getExpress(), incCol, maxDt);
+        String express = String.format("%s AND (%s>=%s)", basePageExpressPO.getExpress(), incCn, maxDt);
         basePageExpressPO.setExpress(express);
+        System.out.println(url+"\n"+ObjectUtil.objectToMap(basePageExpressPO));
         Response response = HttpClientUtils.doGet(url, ObjectUtil.objectToMap(basePageExpressPO));
         String responseData = response.body().string();
         JSONObject jsonObject = JSON.parseObject(responseData);
