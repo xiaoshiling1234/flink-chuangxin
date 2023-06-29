@@ -1,3 +1,6 @@
+CREATE DATABASE `chuangxin` /*!40100 DEFAULT CHARACTER SET utf8mb4 */
+ALTER DATABASE chuangxin CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+
 CREATE TABLE chuangxin.token (
   access_token VARCHAR(255),
   token_type VARCHAR(255),
@@ -7,6 +10,10 @@ CREATE TABLE chuangxin.token (
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+INSERT INTO chuangxin.token
+(access_token, token_type, refresh_token, expires_in, `scope`, create_time, update_time)
+VALUES('9dec770d-a19e-4fa5-9b25-eff1b73e30b1', 'bearer', 'e9bf2b38-da24-4212-8596-98106ba6e518', 604799, 'read_cn', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 
 CREATE TABLE chuangxin.task (
   task_name VARCHAR(255) comment '任务名称',
