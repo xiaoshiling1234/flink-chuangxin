@@ -5,70 +5,64 @@ import com.alibaba.fastjson.JSONObject;
 import com.chuangxin.app.function.MongoDBSink;
 import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.MyKafkaUtil;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
 import org.bson.Document;
 
-import java.io.BufferedInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 public class ImageDownRealTask {
     public static void main(String[] args) throws Exception {
         // 设置Flink环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        DataStreamSource<String> kafkaStream = env.addSource(MyKafkaUtil.getKafkaConsumer(GlobalConfig.IMAGE_SOURCE_TOPIC, GlobalConfig.IMAGE_SOURCE_GROUP_ID));
+        DataStreamSource<String> kafkaStream = env.addSource(MyKafkaUtil.getKafkaConsumer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC, GlobalConfig.KAFKA_IMAGE_SOURCE_GROUP_ID));
 
-        // 解析Kafka数据，提取图片地址
-        DataStream<Tuple2<String, String>> imageStream = kafkaStream.map(new MapFunction<String, Tuple2<String, String>>() {
+        SingleOutputStreamOperator<JSONObject> jsonStream = kafkaStream.map((MapFunction<String, JSONObject>) JSON::parseObject);
+
+        OutputTag<String> outputTag = new OutputTag<String>("FailTask") {
+        };
+        SingleOutputStreamOperator<Document> downImageStream = jsonStream.process(new ProcessFunction<JSONObject, Document>() {
             @Override
-            public Tuple2<String, String> map(String value) throws Exception {
-                JSONObject jsonObject = JSON.parseObject(value);
-                String imageUrl = jsonObject.getString("image_url");
-                String localPath = generateLocalPath(imageUrl);
-                return new Tuple2<>(imageUrl,localPath);
+            public void processElement(JSONObject jsonObject, ProcessFunction<JSONObject, Document>.Context ctx, Collector<Document> out) {
+                String imageUrl = jsonObject.getString("imageUrl");
+                Document document = Document.parse(jsonObject.toJSONString());
+                byte[] image;
+                if (imageUrl==null||!imageUrl.startsWith("http")){
+                    ctx.output(outputTag, JSON.toJSONString(document));
+                }else {
+                    try {
+                        image = downloadImage(jsonObject.getString("imageUrl"));
+                        document.append("imageByte", image);
+                        out.collect(document);
+                    }catch (Exception e){
+                        e.printStackTrace();
+                        ctx.output(outputTag, JSON.toJSONString(document));
+                    }
+                }
             }
         });
 
-        // 下载图片
-        SingleOutputStreamOperator<Document> downloadedImages = imageStream.map(new MapFunction<Tuple2<String, String>, Document>() {
-            @Override
-            public Document map(Tuple2<String, String> value) throws Exception {
-                String imageUrl = value.f0;
-                String localPath = value.f1;
-
-                // 在这里根据图片地址下载图片
-                downloadImage(imageUrl, localPath);
-                return new Document().append("imageUrl", imageUrl).append("localPath",localPath);
-            }
-        });
-
-        downloadedImages.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, GlobalConfig.MONGODB_IMAGE_COLLECTION)).name("MongoDB Sink");
+        downImageStream.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, GlobalConfig.MONGODB_IMAGE_COLLECTION)).name("MongoDB Sink");
+        jsonStream.print("Success-------");
+        downImageStream.getSideOutput(outputTag).print("Fail>>>>>>>>>>>");
+        downImageStream.getSideOutput(outputTag).addSink(MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_FAIl_SOURCE_TOPIC));
         // 执行Flink作业
-        env.execute("KafkaToFlinkToMongoDB");
+        env.execute("FLINK-SYNC:ImageDownRealTask");
     }
 
-    private static String generateLocalPath(String imageUrl) {
-        return imageUrl;
-    }
-
-    private static void downloadImage(String imageUrl, String localPath) throws IOException {
+    private static byte[] downloadImage(String imageUrl) throws IOException {
         URL url = new URL(imageUrl);
-        try (BufferedInputStream in = new BufferedInputStream(url.openStream());
-             OutputStream out = new FileOutputStream(localPath)) {
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer, 0, 1024)) != -1) {
-                out.write(buffer, 0, bytesRead);
-            }
-        }
+        Path tempFile = Files.createTempFile("image", ".jpg");
+        Files.copy(url.openStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+        return Files.readAllBytes(tempFile);
     }
 }
