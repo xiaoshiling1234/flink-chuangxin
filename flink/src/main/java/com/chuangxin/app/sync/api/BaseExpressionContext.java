@@ -43,7 +43,7 @@ public class BaseExpressionContext implements Serializable {
         //使用大于等于预防一次拉不玩的情况
         String express = String.format("%s AND (%s>=%s)", basePageExpressPO.getExpress(), incCn, maxDt);
         basePageExpressPO.setExpress(express);
-        System.out.println(url+"\n"+ObjectUtil.objectToMap(basePageExpressPO));
+        System.out.println(url + "\n" + ObjectUtil.objectToMap(basePageExpressPO));
         Response response = HttpClientUtils.doGet(url, ObjectUtil.objectToMap(basePageExpressPO));
         String responseData = response.body().string();
         JSONObject jsonObject = JSON.parseObject(responseData);
@@ -53,7 +53,7 @@ public class BaseExpressionContext implements Serializable {
         int pageRow = Integer.parseInt(jsonObject.getString("page_row"));
         int total = Integer.parseInt(jsonObject.getString("total"));
         System.out.println("数据总条数:" + total);
-        return total / pageRow + 1;
+        return total >= 10000 ? 200 : total / pageRow + 1;
     }
 
     public HttpSourceFunction getHttpPageSourceFunction(String url, BasePageExpressPO basePageExpressPO) {

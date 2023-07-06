@@ -63,6 +63,6 @@ public class PatentSearchExpression {
         // 写入 MongoDB
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName)).name("MongoDB Sink");
 
-        env.execute("PatentSearchExpression");
+        env.execute(context.taskName);
     }
 }

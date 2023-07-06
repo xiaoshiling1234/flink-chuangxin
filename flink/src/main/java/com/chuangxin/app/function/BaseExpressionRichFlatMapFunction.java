@@ -20,7 +20,7 @@ public class BaseExpressionRichFlatMapFunction extends RichFlatMapFunction<Strin
     private final BaseExpressionContext context;
 
     public BaseExpressionRichFlatMapFunction(BaseExpressionContext context) {
-        this.context=context;
+        this.context = context;
     }
 
     @Override
@@ -35,13 +35,6 @@ public class BaseExpressionRichFlatMapFunction extends RichFlatMapFunction<Strin
 
     @Override
     public void close() {
-        try {
-            HashMap<String, Object> updateInfo = new HashMap<>();
-            updateInfo.put("max_dt", maxDtState.value());
-            MysqlUtil.update("task", updateInfo, String.format("task_name='%s'",context.getTaskName()));
-        } catch (Exception ignored) {
-
-        }
         System.out.println("任务结束");
     }
 
@@ -56,12 +49,15 @@ public class BaseExpressionRichFlatMapFunction extends RichFlatMapFunction<Strin
             try {
                 if (maxDtState.value() == null) {
                     maxDtState.update(pdFormat);
-                    System.out.printf("最大%s已更新为:%s%n",context.getIncCn(),pdFormat);
+                    System.out.printf("最大%s已更新为:%s%n", context.getIncCn(), pdFormat);
                 } else {
                     String currentMaxDt = maxDtState.value();
-                    if (pdFormat.compareTo(currentMaxDt) > 0) {
+                    if (!pdFormat.equals("") && pdFormat.compareTo(currentMaxDt) > 0) {
+                        HashMap<String, Object> updateInfo = new HashMap<>();
+                        updateInfo.put("max_dt", pdFormat);
+                        MysqlUtil.update("task", updateInfo, String.format("task_name='%s'", context.getTaskName()));
                         maxDtState.update(pdFormat);
-                        System.out.printf("最大%s已更新为:%s%n",context.getIncCn(),pdFormat);
+                        System.out.printf("最大%s已更新为:%s%n", context.getIncCn(), pdFormat);
                     }
                 }
                 collector.collect(record.toString());
