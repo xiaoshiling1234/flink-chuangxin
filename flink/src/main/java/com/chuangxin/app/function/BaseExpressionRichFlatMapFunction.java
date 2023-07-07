@@ -41,29 +41,34 @@ public class BaseExpressionRichFlatMapFunction extends RichFlatMapFunction<Strin
     @Override
     public void flatMap(String s, Collector<String> collector) {
         JSONObject jsonObject = JSONObject.parseObject(s);
-        JSONArray records = jsonObject.getJSONObject("context").getJSONArray("records");
-        records.forEach(record -> {
-            String pd = JSONObject.parseObject(record.toString()).getString(context.getIncCol());
-            String pdFormat = convertDateFormat(pd);
-
-            try {
-                if (maxDtState.value() == null) {
-                    maxDtState.update(pdFormat);
-                    System.out.printf("最大%s已更新为:%s%n", context.getIncCn(), pdFormat);
-                } else {
-                    String currentMaxDt = maxDtState.value();
-                    if (!pdFormat.equals("") && pdFormat.compareTo(currentMaxDt) > 0) {
-                        HashMap<String, Object> updateInfo = new HashMap<>();
-                        updateInfo.put("max_dt", pdFormat);
-                        MysqlUtil.update("task", updateInfo, String.format("task_name='%s'", context.getTaskName()));
+        try {
+            JSONArray records = jsonObject.getJSONObject("context").getJSONArray("records");
+            records.forEach(record -> {
+                String pd = JSONObject.parseObject(record.toString()).getString(context.getIncCol());
+                String pdFormat = convertDateFormat(pd);
+                try {
+                    if (maxDtState.value() == null) {
                         maxDtState.update(pdFormat);
                         System.out.printf("最大%s已更新为:%s%n", context.getIncCn(), pdFormat);
+                    } else {
+                        String currentMaxDt = maxDtState.value();
+                        if (!pdFormat.equals("") && pdFormat.compareTo(currentMaxDt) > 0) {
+                            HashMap<String, Object> updateInfo = new HashMap<>();
+                            updateInfo.put("max_dt", pdFormat);
+                            MysqlUtil.update("task", updateInfo, String.format("task_name='%s'", context.getTaskName()));
+                            maxDtState.update(pdFormat);
+                            System.out.printf("最大%s已更新为:%s%n", context.getIncCn(), pdFormat);
+                        }
                     }
+                    collector.collect(record.toString());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
-                collector.collect(record.toString());
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println(jsonObject.toJSONString());
+            throw new RuntimeException();
+        }
     }
 }

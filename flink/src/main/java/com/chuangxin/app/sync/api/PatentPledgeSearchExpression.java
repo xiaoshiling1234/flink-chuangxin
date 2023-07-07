@@ -4,7 +4,9 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.chuangxin.app.function.BaseExpressionRichFlatMapFunction;
 import com.chuangxin.app.function.HttpSourceFunction;
+import com.chuangxin.app.function.ImageDownAndDocumentProcessFunction;
 import com.chuangxin.app.function.MongoDBSink;
+import com.chuangxin.bean.ImageDownBean;
 import com.chuangxin.bean.api.BasePageExpressPO;
 import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.MyKafkaUtil;
@@ -35,28 +37,12 @@ public class PatentPledgeSearchExpression {
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
         OutputTag<String> outputTag = new OutputTag<String>("ImageUrl") {
         };
+        ImageDownBean imageDownBean = new ImageDownBean(context.getTaskName(), "ano", "IMGO");
+        SingleOutputStreamOperator<Document> documents = recordsStream.process(new ImageDownAndDocumentProcessFunction(context, outputTag, imageDownBean));
 
-        SingleOutputStreamOperator<Document> documents = recordsStream.process(new ProcessFunction<String, Document>() {
-            final HashMap<String, String> map = new HashMap<>();
-            @Override
-            public void processElement(String value, ProcessFunction<String, Document>.Context ctx, Collector<Document> out) {
-                JSONObject jsonObject = JSON.parseObject(value);
-                map.clear();
-                map.put("task_name", context.getTaskName());
-                map.put("pid", jsonObject.getString("pid"));
-                map.put("field_name", "IMGO");
-                map.put("imageUrl", jsonObject.getString("IMGO"));
-                String json = JSON.toJSONString(map);
-                ctx.output(outputTag, json);
-                out.collect(Document.parse(value));
-            }
-        });
-
-        //写入mongoDB
+        // 写入mongoDB
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName));
-
-//        documents.getSideOutput(outputTag).print("ImageUrl>>>>>>>>>>>");
-
+        // 图片下载任务写入Kafka
         documents.getSideOutput(outputTag).addSink(MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC));
         env.execute(context.taskName);
     }

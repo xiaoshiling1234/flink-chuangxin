@@ -26,6 +26,5 @@ public class GlobalConfig {
      */
     public static final String KAFKA_BROKERS="192.168.203.128:9092";
     public static final String KAFKA_IMAGE_SOURCE_TOPIC="kafka_image_source_topic";
-    public static final String KAFKA_IMAGE_FAIl_SOURCE_TOPIC="kafka_image_fail_source_topic";
     public static final String KAFKA_IMAGE_SOURCE_GROUP_ID="image_source";
 }
