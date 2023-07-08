@@ -33,12 +33,12 @@ public class ImageDownRealTask {
     public static void main(String[] args) throws Exception {
         // 设置Flink环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(new FsStateBackend("file:///opt/modules/flink/data/checkpoint/imagedownrealtask/ck"));
-        env.enableCheckpointing(5000L);
+        env.setStateBackend(new FsStateBackend("hdfs:///flink/checkpoints/imagedownrealtask/ck"));
+        env.enableCheckpointing(60000L);
         env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-        env.getCheckpointConfig().setCheckpointTimeout(10000L);
-        env.getCheckpointConfig().setMaxConcurrentCheckpoints(2);
-        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(3000);
+        env.getCheckpointConfig().setCheckpointTimeout(600000L);
+        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(10000);
         env.getCheckpointConfig().setExternalizedCheckpointCleanup(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
         env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, Time.seconds(10)));
 
@@ -54,30 +54,37 @@ public class ImageDownRealTask {
                 Document document = BsonUtil.toDocument(imageDownBean);
                 byte[] image;
                 if (imageUrl == null || !imageUrl.startsWith("http")) {
-                    context.output(outputTag, imageDownBean);
+                    imageDownBean.setErrorInfo("非法的图片地址");
+                    imageDownBean.setDownStatus(0);
                 } else {
                     try {
                         image = downloadImage(imageUrl);
                         document.append("imageByte", image);
+                        imageDownBean.setDownStatus(1);
                         collector.collect(document);
                     } catch (Exception e) {
                         e.printStackTrace();
+                        imageDownBean.setErrorInfo(e.getMessage());
+                        imageDownBean.setDownStatus(0);
                         context.output(outputTag, imageDownBean);
                     }
                 }
+                context.output(outputTag, imageDownBean);
             }
         });
 
         downImageStream.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, GlobalConfig.MONGODB_IMAGE_COLLECTION)).name("MongoDB Sink");
         downImageStream.getSideOutput(outputTag).addSink(
                 JdbcSink.sink(
-                        "insert into image_await_task (task_name, key_field, key_value, image_field_name, image_url) values (?, ? ,? ,? ,?)",
+                        "insert into image_await_task (task_name, key_field, key_value, image_field_name, image_url , down_status, error_info) values (? ,? , ? ,? ,? ,? ,?)",
                         (statement, imageDownBean) -> {
-                            statement.setString(1,imageDownBean.getTaskName());
-                            statement.setString(2,imageDownBean.getKeyField());
-                            statement.setString(3,imageDownBean.getKeyValue());
-                            statement.setString(4,imageDownBean.getImageFieldName());
-                            statement.setString(5,imageDownBean.getImageUrl());
+                            statement.setString(1, imageDownBean.getTaskName());
+                            statement.setString(2, imageDownBean.getKeyField());
+                            statement.setString(3, imageDownBean.getKeyValue());
+                            statement.setString(4, imageDownBean.getImageFieldName());
+                            statement.setString(5, imageDownBean.getImageUrl());
+                            statement.setInt(6, imageDownBean.getDownStatus());
+                            statement.setString(7, imageDownBean.getErrorInfo());
                         },
                         JdbcExecutionOptions.builder()
                                 .withBatchSize(50)

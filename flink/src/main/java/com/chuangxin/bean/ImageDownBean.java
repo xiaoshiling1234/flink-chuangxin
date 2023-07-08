@@ -28,7 +28,14 @@ public class ImageDownBean implements Serializable {
      * 图片地址
      */
     String imageUrl;
-
+    /**
+     * 图片是否下载：0否1是
+     */
+    Integer downStatus;
+    /**
+     * 错误信息
+     */
+    String errorInfo;
     public ImageDownBean(String taskName, String keyField,String imageFieldName) {
         this.taskName = taskName;
         this.keyField = keyField;

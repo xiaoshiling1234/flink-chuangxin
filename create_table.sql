@@ -24,16 +24,17 @@ CREATE TABLE chuangxin.task (
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-insert into task (task_name,max_dt,inc_cn,inc_col) values
-('FLINK-SYNC:PATENT_SEARCH_EXPRESSION','19900101','申请日','ad')
-,('FLINK-SYNC:PATENT_TRANSFER_SEARCH_EXPRESSION','19900101','变更生效日期','edd')
-,('FLINK-SYNC:PATENT_TRANSFER_RECORD_SEARCH_EXPRESSION','19900101','法律状态公告日','ilsad')
-,('FLINK-SYNC:PATENT_PLEDGE_SEARCH_EXPRESSION','19900101','生效日期','ppedd')
-,('FLINK-SYNC:PATENT_PLEDGE_RECORD_SEARCH_EXPRESSION','19900101','生效日期','ppedd')
-,('FLINK-SYNC:PATENT_PERMIT_SEARCH_EXPRESSION','19900101','合同备案日期','crdd')
-,('FLINK-SYNC:PATENT_PERMIT_RECORD_SEARCH_EXPRESSION','19900101','合同备案日期','crdd')
-,('FLINK-SYNC:PATENT_LAW_STATUS_SEARCH_EXPRESSION','19900101','法律公告日','ilsad')
-,('FLINK-SYNC:PATENT_LAW_RECORD_STATUS_SEARCH_EXPRESSION','19900101','法律状态公告日','ilsad');
+INSERT INTO chuangxin.task (task_name,max_dt,inc_cn,inc_col) VALUES
+	 ('FLINK-SYNC:PATENT_SEARCH_EXPRESSION','19900101','申请日','ad'),
+	 ('FLINK-SYNC:PATENT_TRANSFER_SEARCH_EXPRESSION','19900101','申请日','ad'),
+	 ('FLINK-SYNC:PATENT_TRANSFER_RECORD_SEARCH_EXPRESSION','19900101','法律公告日','ilsad'),
+	 ('FLINK-SYNC:PATENT_PLEDGE_SEARCH_EXPRESSION','19900101','申请日','ad'),
+	 ('FLINK-SYNC:PATENT_PLEDGE_RECORD_SEARCH_EXPRESSION','19900101','生效日期','ppedd'),
+	 ('FLINK-SYNC:PATENT_PERMIT_SEARCH_EXPRESSION','19900101','申请日','ad'),
+	 ('FLINK-SYNC:PATENT_PERMIT_RECORD_SEARCH_EXPRESSION','19900101','合同备案日期','crdd'),
+	 ('FLINK-SYNC:PATENT_LAW_STATUS_SEARCH_EXPRESSION','19900101','申请日','ad'),
+	 ('FLINK-SYNC:PATENT_LAW_RECORD_STATUS_SEARCH_EXPRESSION','19900101','法律公告日','ilsad');
+
 
 CREATE TABLE chuangxin.sub_task (
   pid VARCHAR(255) comment '专利编码',
@@ -43,3 +44,19 @@ CREATE TABLE chuangxin.sub_task (
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+CREATE TABLE chuangxin.image_await_task (
+  task_name VARCHAR(255) comment '任务名称',
+  key_field VARCHAR(255) comment '主键字段',
+  key_value VARCHAR(255) comment '主键字段值',
+  image_field_name VARCHAR(255) comment '图片字段',
+  image_url VARCHAR(255) comment '图片地址',
+  down_status INT DEFAULT 0 comment '图片是否下载：0否1是',
+  error_info TEXT comment '错误信息',
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+--创建topic
+--kafka-topics.sh --zookeeper bigdata01:2181 --delete --topic kafka_image_source_topic
+--kafka-topics.sh --create --zookeeper bigdata01:2181 --replication-factor 1 --partitions 1 --topic kafka_image_source_topic
