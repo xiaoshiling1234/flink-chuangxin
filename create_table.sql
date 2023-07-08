@@ -59,4 +59,4 @@ CREATE TABLE chuangxin.image_await_task (
 
 --创建topic
 --kafka-topics.sh --zookeeper bigdata01:2181 --delete --topic kafka_image_source_topic
---kafka-topics.sh --create --zookeeper bigdata01:2181 --replication-factor 1 --partitions 1 --topic kafka_image_source_topic
+--kafka-topics.sh --create --zookeeper bigdata01:2181 --replication-factor 1 --partitions 2 --topic kafka_image_source_topic

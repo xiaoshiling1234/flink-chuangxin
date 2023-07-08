@@ -33,13 +33,13 @@ public class ImageDownRealTask {
     public static void main(String[] args) throws Exception {
         // 设置Flink环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setStateBackend(new FsStateBackend("hdfs:///flink/checkpoints/imagedownrealtask/ck"));
-        env.enableCheckpointing(60000L);
-        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-        env.getCheckpointConfig().setCheckpointTimeout(600000L);
-        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
-        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(10000);
-        env.getCheckpointConfig().setExternalizedCheckpointCleanup(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+//        env.setStateBackend(new FsStateBackend("hdfs:///flink/checkpoints/imagedownrealtask/ck"));
+//        env.enableCheckpointing(60000L);
+//        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+//        env.getCheckpointConfig().setCheckpointTimeout(600000L);
+//        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+//        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(10000);
+//        env.getCheckpointConfig().setExternalizedCheckpointCleanup(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
         env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, Time.seconds(10)));
 
         DataStreamSource<String> kafkaStream = env.addSource(MyKafkaUtil.getKafkaConsumer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC, GlobalConfig.KAFKA_IMAGE_SOURCE_GROUP_ID));
@@ -107,6 +107,8 @@ public class ImageDownRealTask {
         URL url = new URL(imageUrl);
         Path tempFile = Files.createTempFile("image", ".jpg");
         Files.copy(url.openStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
-        return Files.readAllBytes(tempFile);
+        byte[] imageBytes = Files.readAllBytes(tempFile);
+        Files.delete(tempFile);
+        return imageBytes;
     }
 }

@@ -12,6 +12,7 @@ import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.MyKafkaUtil;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -28,11 +29,10 @@ public class PatentPledgeSearchExpression {
     public static void main(String[] args) throws Exception {
         BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_PLEDGE_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
         System.out.printf("当前%s:%s%n", context.incCn, context.maxDt);
         BasePageExpressPO basePageExpressPO = new BasePageExpressPO(context.incCol);
         HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/pledgeSearch/expression", basePageExpressPO);
-        DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
+        DataStream<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction).rebalance();
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
         OutputTag<String> outputTag = new OutputTag<String>("ImageUrl") {

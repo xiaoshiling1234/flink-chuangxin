@@ -25,11 +25,10 @@ public class PatentTransferSearchExpression {
     public static void main(String[] args) throws Exception {
         BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_TRANSFER_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
-        System.out.printf("当前%s:%s%n",context.incCn,context.maxDt);
+        System.out.printf("当前%s:%s%n", context.incCn, context.maxDt);
         BasePageExpressPO basePageExpressPO = new BasePageExpressPO(context.incCol);
         HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/transferSearch/expression", basePageExpressPO);
-        DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
+        DataStream<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction).rebalance();
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
         OutputTag<String> outputTag = new OutputTag<String>("ImageUrl") {

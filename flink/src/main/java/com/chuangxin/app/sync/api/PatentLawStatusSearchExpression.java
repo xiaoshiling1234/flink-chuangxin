@@ -25,11 +25,10 @@ public class PatentLawStatusSearchExpression {
     public static void main(String[] args) throws Exception {
         BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_LAW_STATUS_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
         System.out.printf("当前%s:%s%n", context.incCn, context.maxDt);
         BasePageExpressPO basePageExpressPO = new BasePageExpressPO(context.incCol);
         HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/lawStatusSearch/expression", basePageExpressPO);
-        DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
+        DataStream<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction).rebalance();
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
 
@@ -40,7 +39,7 @@ public class PatentLawStatusSearchExpression {
         // 写入mongoDB
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName));
         // 图片下载任务写入Kafka
-        documents.getSideOutput(outputTag).addSink(MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC));
+        documents.getSideOutput(outputTag).rebalance().addSink(MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC));
         env.execute(context.taskName);
     }
 } 
