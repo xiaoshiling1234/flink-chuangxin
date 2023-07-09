@@ -23,13 +23,12 @@ public class PatentTransferRecordSearchExpression {
         BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_TRANSFER_RECORD_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
-        System.out.printf("当前%s:%s%n",context.incCn,context.maxDt);
+        System.out.printf("当前%s:%s%n", context.incCn, context.maxDt);
         BasePageExpressPO basePageExpressPO = new BasePageExpressPO(context.incCol);
         HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/transferRecordSearch/expression", basePageExpressPO);
         DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);
         //为了使用状态增加虚拟keyby
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
-        ;
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
         DataStream<Document> documents = recordsStream.map((MapFunction<String, Document>) Document::parse);
         //写入mongoDB

@@ -12,6 +12,8 @@ import com.chuangxin.common.GlobalConfig;
 import com.chuangxin.util.MyKafkaUtil;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.connector.base.DeliveryGuarantee;
+import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
@@ -43,7 +45,8 @@ public class PatentPledgeSearchExpression {
         // 写入mongoDB
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName));
         // 图片下载任务写入Kafka
-        documents.getSideOutput(outputTag).addSink(MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC, context.taskName));
+        KafkaSink<String> kafkaProducer = MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC, DeliveryGuarantee.NONE);
+        documents.getSideOutput(outputTag).sinkTo(kafkaProducer);
         env.execute(context.taskName);
     }
 } 

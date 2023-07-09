@@ -22,7 +22,7 @@ public class PatentPledgeRecordSearchExpression {
         BaseExpressionContext context = new BaseExpressionContext("FLINK-SYNC:PATENT_PLEDGE_RECORD_SEARCH_EXPRESSION");
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
-        System.out.printf("当前%s:%s%n",context.incCn,context.maxDt);
+        System.out.printf("当前%s:%s%n", context.incCn, context.maxDt);
         BasePageExpressPO basePageExpressPO = new BasePageExpressPO(context.incCol);
         HttpSourceFunction sourceFunction = context.getHttpPageSourceFunction("/api/patent/pledgeRecordSearch/expression", basePageExpressPO);
         DataStreamSource<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction);

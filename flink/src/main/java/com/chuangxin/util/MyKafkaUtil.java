@@ -2,53 +2,36 @@ package com.chuangxin.util;
 
 import com.chuangxin.common.GlobalConfig;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
-import org.apache.flink.streaming.connectors.kafka.KafkaSerializationSchema;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
-
-import java.util.Properties;
-import java.util.UUID;
+import org.apache.flink.connector.base.DeliveryGuarantee;
+import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
+import org.apache.flink.connector.kafka.sink.KafkaSink;
+import org.apache.flink.connector.kafka.source.KafkaSource;
+import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 
 public class MyKafkaUtil {
     private static final String brokers = GlobalConfig.KAFKA_BROKERS;
 
-    public static FlinkKafkaProducer<String> getKafkaProducer(String topic) {
-        return new FlinkKafkaProducer<String>(brokers,
-                topic,
-                new SimpleStringSchema());
+    public static KafkaSink<String> getKafkaProducer(String topic,DeliveryGuarantee deliveryGuarantee) {
+        return KafkaSink.<String>builder()
+                .setBootstrapServers(brokers)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                        .setTopic(topic)
+                        .setValueSerializationSchema(new SimpleStringSchema())
+                        .build()
+                )
+                .setDeliveryGuarantee(deliveryGuarantee)
+                .build();
     }
 
-    public static FlinkKafkaProducer<String> getKafkaProducer(String topic, String producerName) {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, UUID.nameUUIDFromBytes(producerName.getBytes()).toString());
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
-        return new FlinkKafkaProducer<>(topic, new SimpleStringSchema(), props);
-    }
+    public static KafkaSource<String> getKafkaConsumer(String topic, String groupId) {
 
-    public static <T> FlinkKafkaProducer<T> getKafkaProducer(String topic, KafkaSerializationSchema<T> kafkaSerializationSchema) {
-
-        Properties properties = new Properties();
-        properties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
-
-        return new FlinkKafkaProducer<T>(topic,
-                kafkaSerializationSchema,
-                properties,
-                FlinkKafkaProducer.Semantic.EXACTLY_ONCE);
-    }
-
-    public static FlinkKafkaConsumer<String> getKafkaConsumer(String topic, String groupId) {
-
-        Properties properties = new Properties();
-
-        properties.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
-
-        return new FlinkKafkaConsumer<>(topic,
-                new SimpleStringSchema(),
-                properties);
-
+        return KafkaSource.<String>builder()
+                .setBootstrapServers(GlobalConfig.KAFKA_BROKERS)
+                .setTopics(topic)
+                .setGroupId(groupId)
+                .setStartingOffsets(OffsetsInitializer.earliest())
+                .setValueOnlyDeserializer(new SimpleStringSchema())
+                .build();
     }
 
 }
