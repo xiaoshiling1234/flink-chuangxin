@@ -68,7 +68,7 @@ public class PatentSearchExpression {
         // 写入 MongoDB
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName)).name("MongoDB Sink");
         // 图片下载任务写入Kafka
-        documents.getSideOutput(outputTag).addSink(MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC));
+        documents.getSideOutput(outputTag).addSink(MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC, context.taskName));
         env.execute(context.taskName);
     }
 }

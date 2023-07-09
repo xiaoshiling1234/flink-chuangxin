@@ -9,6 +9,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 
 import java.util.Properties;
+import java.util.UUID;
 
 public class MyKafkaUtil {
     private static final String brokers = GlobalConfig.KAFKA_BROKERS;
@@ -17,6 +18,13 @@ public class MyKafkaUtil {
         return new FlinkKafkaProducer<String>(brokers,
                 topic,
                 new SimpleStringSchema());
+    }
+
+    public static FlinkKafkaProducer<String> getKafkaProducer(String topic, String producerName) {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, UUID.nameUUIDFromBytes(producerName.getBytes()).toString());
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);
+        return new FlinkKafkaProducer<>(topic, new SimpleStringSchema(), props);
     }
 
     public static <T> FlinkKafkaProducer<T> getKafkaProducer(String topic, KafkaSerializationSchema<T> kafkaSerializationSchema) {

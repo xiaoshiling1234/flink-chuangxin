@@ -68,7 +68,8 @@ public class BaseExpressionRichFlatMapFunction extends RichFlatMapFunction<Strin
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println(jsonObject.toJSONString());
-            throw new RuntimeException();
+            // 暂时先不抛异常了
+//            throw new RuntimeException();
         }
     }
 }
