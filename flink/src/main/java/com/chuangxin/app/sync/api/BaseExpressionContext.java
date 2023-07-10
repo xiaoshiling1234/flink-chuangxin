@@ -13,6 +13,7 @@ import com.chuangxin.util.MysqlUtil;
 import com.chuangxin.util.ObjectUtil;
 import com.squareup.okhttp.Response;
 import lombok.Data;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
 import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
 import org.apache.flink.connector.jdbc.JdbcSink;
@@ -23,6 +24,7 @@ import org.apache.flink.util.OutputTag;
 import org.bson.Document;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.net.URL;
 import java.nio.file.Files;
@@ -32,6 +34,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Data
 public class BaseExpressionContext implements Serializable {
@@ -92,29 +96,51 @@ public class BaseExpressionContext implements Serializable {
         };
         // 图片下载任务写入Kafka
         SingleOutputStreamOperator<Document> downImageStream = documents.getSideOutput(outputTag).process(new ProcessFunction<ImageDownBean, Document>() {
+            private ExecutorService executorService;
+
             @Override
-            public void processElement(ImageDownBean imageDownBean, ProcessFunction<ImageDownBean, Document>.Context context, Collector<Document> collector) throws Exception {
+            public void open(Configuration parameters) throws Exception {
+                super.open(parameters);
+                // 初始化线程池
+                executorService = Executors.newFixedThreadPool(10);
+            }
+
+            @Override
+            public void close() throws Exception {
+                super.close();
+                // 关闭线程池
+                if (executorService != null) {
+                    executorService.shutdown();
+                }
+            }
+
+            @Override
+            public void processElement(ImageDownBean imageDownBean, ProcessFunction<ImageDownBean, Document>.Context context, Collector<Document> collector) {
+
                 String imageUrl = imageDownBean.getImageUrl();
                 Document document = BsonUtil.toDocument(imageDownBean);
-                byte[] image;
                 if (imageUrl == null || !imageUrl.startsWith("http")) {
                     imageDownBean.setErrorInfo("非法的图片地址");
                     imageDownBean.setDownStatus(0);
-                } else {
+                    if (imageDownBean.getDownStatus() == 0) {
+                        context.output(failTag, imageDownBean);
+                    }
+                    return;
+                }
+
+                // 使用线程池提交下载任务
+                executorService.submit(() -> {
                     try {
-                        image = downloadImage(imageUrl);
+                        byte[] image = downloadImage(imageUrl);
                         document.append("imageByte", image);
-                        imageDownBean.setDownStatus(1);
                         collector.collect(document);
                     } catch (Exception e) {
                         e.printStackTrace();
                         imageDownBean.setErrorInfo(e.getMessage());
                         imageDownBean.setDownStatus(0);
+                        context.output(failTag, imageDownBean);
                     }
-                }
-                if (imageDownBean.getDownStatus() == 0) {
-                    context.output(failTag, imageDownBean);
-                }
+                });
             }
         });
 
@@ -136,7 +162,7 @@ public class BaseExpressionContext implements Serializable {
                         },
                         JdbcExecutionOptions.builder()
                                 .withBatchSize(50)
-                                .withBatchIntervalMs(200)
+                                .withBatchIntervalMs(5000)
                                 .withMaxRetries(5)
                                 .build(),
                         new JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
@@ -149,10 +175,13 @@ public class BaseExpressionContext implements Serializable {
         ).name("JDBC Sink");
     }
 
+
     private byte[] downloadImage(String imageUrl) throws IOException {
         URL url = new URL(imageUrl);
         Path tempFile = Files.createTempFile("image", ".jpg");
-        Files.copy(url.openStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+        try (InputStream inputStream = url.openStream()) {
+            Files.copy(inputStream, tempFile, StandardCopyOption.REPLACE_EXISTING);
+        }
         byte[] imageBytes = Files.readAllBytes(tempFile);
         Files.delete(tempFile);
         return imageBytes;
