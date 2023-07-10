@@ -4,21 +4,15 @@ import com.chuangxin.app.function.BaseExpressionRichFlatMapFunction;
 import com.chuangxin.app.function.HttpSourceFunction;
 import com.chuangxin.app.function.ImageDownAndDocumentProcessFunction;
 import com.chuangxin.app.function.MongoDBSink;
-import com.chuangxin.app.sync.api.BaseExpressionContext;
 import com.chuangxin.bean.ImageDownBean;
 import com.chuangxin.bean.api.PatentSearchExpressionPO;
 import com.chuangxin.common.GlobalConfig;
-import com.chuangxin.util.MyKafkaUtil;
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.connector.base.DeliveryGuarantee;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
 import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
 import org.apache.flink.connector.jdbc.JdbcSink;
-import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -39,11 +33,23 @@ public class PatentSearchExpression {
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
 
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
-        OutputTag<String> outputTag = new OutputTag<String>("ImageUrl") {
+        OutputTag<ImageDownBean> outputTag = new OutputTag<ImageDownBean>("ImageInfo") {
         };
         ImageDownBean imageDownBean = new ImageDownBean(context.getTaskName(), "ano", "IMGO");
-        SingleOutputStreamOperator<Document> documents = recordsStream.process(new ImageDownAndDocumentProcessFunction(context, outputTag, imageDownBean));
+        SingleOutputStreamOperator<Document> documents = recordsStream.rebalance().process(new ImageDownAndDocumentProcessFunction(context, outputTag, imageDownBean));
+        // 写入 MongoDB
+        documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName)).name("MongoDB Sink");
+
+        // 下载图片，并存储下载任务信息
+        context.processImage(outputTag, documents);
+
         // 写入子任务
+        writeSubTask(documents);
+
+        env.execute(context.taskName);
+    }
+
+    private static void writeSubTask(SingleOutputStreamOperator<Document> documents) {
         documents.addSink(
                 JdbcSink.sink(
                         "insert into sub_task (pid, pno) values (?, ?)",
@@ -66,12 +72,7 @@ public class PatentSearchExpression {
                                 .build()
                 )
         ).name("JDBC Sink");
-
-        // 写入 MongoDB
-        documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName)).name("MongoDB Sink");
-        // 图片下载任务写入Kafka
-        KafkaSink<String> kafkaProducer = MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC, DeliveryGuarantee.NONE);
-        documents.getSideOutput(outputTag).sinkTo(kafkaProducer);
-        env.execute(context.taskName);
     }
+
+
 }

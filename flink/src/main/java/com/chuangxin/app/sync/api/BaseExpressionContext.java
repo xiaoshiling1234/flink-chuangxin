@@ -3,16 +3,31 @@ package com.chuangxin.app.sync.api;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.chuangxin.app.function.HttpSourceFunction;
+import com.chuangxin.app.function.MongoDBSink;
+import com.chuangxin.bean.ImageDownBean;
 import com.chuangxin.bean.api.BasePageExpressPO;
 import com.chuangxin.common.GlobalConfig;
+import com.chuangxin.util.BsonUtil;
 import com.chuangxin.util.HttpClientUtils;
 import com.chuangxin.util.MysqlUtil;
 import com.chuangxin.util.ObjectUtil;
 import com.squareup.okhttp.Response;
 import lombok.Data;
+import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
+import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
+import org.apache.flink.connector.jdbc.JdbcSink;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
+import org.bson.Document;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -70,5 +85,76 @@ public class BaseExpressionContext implements Serializable {
                 return requestJsonList;
             }
         };
+    }
+
+    public void processImage(OutputTag<ImageDownBean> outputTag, SingleOutputStreamOperator<Document> documents) {
+        OutputTag<ImageDownBean> failTag = new OutputTag<ImageDownBean>("FailTask") {
+        };
+        // 图片下载任务写入Kafka
+        SingleOutputStreamOperator<Document> downImageStream = documents.getSideOutput(outputTag).process(new ProcessFunction<ImageDownBean, Document>() {
+            @Override
+            public void processElement(ImageDownBean imageDownBean, ProcessFunction<ImageDownBean, Document>.Context context, Collector<Document> collector) throws Exception {
+                String imageUrl = imageDownBean.getImageUrl();
+                Document document = BsonUtil.toDocument(imageDownBean);
+                byte[] image;
+                if (imageUrl == null || !imageUrl.startsWith("http")) {
+                    imageDownBean.setErrorInfo("非法的图片地址");
+                    imageDownBean.setDownStatus(0);
+                } else {
+                    try {
+                        image = downloadImage(imageUrl);
+                        document.append("imageByte", image);
+                        imageDownBean.setDownStatus(1);
+                        collector.collect(document);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        imageDownBean.setErrorInfo(e.getMessage());
+                        imageDownBean.setDownStatus(0);
+                    }
+                }
+                if (imageDownBean.getDownStatus() == 0) {
+                    context.output(failTag, imageDownBean);
+                }
+            }
+        });
+
+        // 成功下载的数据存储到mongdb
+        downImageStream.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, GlobalConfig.MONGODB_IMAGE_COLLECTION)).name("MongoDB Sink");
+
+        //存储所有的异常信息
+        downImageStream.getSideOutput(failTag).addSink(
+                JdbcSink.sink(
+                        "insert into image_await_task (task_name, key_field, key_value, image_field_name, image_url , down_status, error_info) values (? ,? , ? ,? ,? ,? ,?)",
+                        (statement, imageDownBean) -> {
+                            statement.setString(1, imageDownBean.getTaskName());
+                            statement.setString(2, imageDownBean.getKeyField());
+                            statement.setString(3, imageDownBean.getKeyValue());
+                            statement.setString(4, imageDownBean.getImageFieldName());
+                            statement.setString(5, imageDownBean.getImageUrl());
+                            statement.setInt(6, imageDownBean.getDownStatus());
+                            statement.setString(7, imageDownBean.getErrorInfo());
+                        },
+                        JdbcExecutionOptions.builder()
+                                .withBatchSize(50)
+                                .withBatchIntervalMs(200)
+                                .withMaxRetries(5)
+                                .build(),
+                        new JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
+                                .withUrl(GlobalConfig.MYSQL_URL)
+                                .withDriverName("com.mysql.jdbc.Driver")
+                                .withUsername(GlobalConfig.MYSQL_USER)
+                                .withPassword(GlobalConfig.MYSQL_PASSWORD)
+                                .build()
+                )
+        ).name("JDBC Sink");
+    }
+
+    private byte[] downloadImage(String imageUrl) throws IOException {
+        URL url = new URL(imageUrl);
+        Path tempFile = Files.createTempFile("image", ".jpg");
+        Files.copy(url.openStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+        byte[] imageBytes = Files.readAllBytes(tempFile);
+        Files.delete(tempFile);
+        return imageBytes;
     }
 }

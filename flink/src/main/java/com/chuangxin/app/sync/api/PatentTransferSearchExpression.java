@@ -7,14 +7,9 @@ import com.chuangxin.app.function.MongoDBSink;
 import com.chuangxin.bean.ImageDownBean;
 import com.chuangxin.bean.api.BasePageExpressPO;
 import com.chuangxin.common.GlobalConfig;
-import com.chuangxin.util.MyKafkaUtil;
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.connector.base.DeliveryGuarantee;
-import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -33,15 +28,14 @@ public class PatentTransferSearchExpression {
         DataStream<Tuple2<Map<String, String>, String>> streamSource = env.addSource(sourceFunction).rebalance();
         KeyedStream<String, Object> keyedStream = streamSource.map(x -> x.f1).keyBy((KeySelector<String, Object>) value -> "dummyKey");
         SingleOutputStreamOperator<String> recordsStream = keyedStream.flatMap(new BaseExpressionRichFlatMapFunction(context));
-        OutputTag<String> outputTag = new OutputTag<String>("ImageUrl") {
+        OutputTag<ImageDownBean> outputTag = new OutputTag<ImageDownBean>("ImageInfo") {
         };
         ImageDownBean imageDownBean = new ImageDownBean(context.getTaskName(), "ano", "IMGO");
-        SingleOutputStreamOperator<Document> documents = recordsStream.process(new ImageDownAndDocumentProcessFunction(context, outputTag, imageDownBean));
+        SingleOutputStreamOperator<Document> documents = recordsStream.rebalance().process(new ImageDownAndDocumentProcessFunction(context, outputTag, imageDownBean));
         // 写入mongoDB
         documents.addSink(new MongoDBSink(GlobalConfig.MONGODB_SYNC_DBNAME, context.taskName));
-        // 图片下载任务写入Kafka
-        KafkaSink<String> kafkaProducer = MyKafkaUtil.getKafkaProducer(GlobalConfig.KAFKA_IMAGE_SOURCE_TOPIC, DeliveryGuarantee.NONE);
-        documents.getSideOutput(outputTag).sinkTo(kafkaProducer);
+        // 下载图片，并存储下载任务信息
+        context.processImage(outputTag,documents);
         env.execute(context.taskName);
     }
 } 

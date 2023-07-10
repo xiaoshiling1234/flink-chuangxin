@@ -14,7 +14,7 @@ import org.bson.Document;
  */
 public class ImageDownAndDocumentProcessFunction extends ProcessFunction<String, Document> {
     BaseExpressionContext context;
-    OutputTag<String> outputTag;
+    OutputTag<ImageDownBean> outputTag;
     ImageDownBean imageDownBean;
 
     @Override
@@ -22,13 +22,12 @@ public class ImageDownAndDocumentProcessFunction extends ProcessFunction<String,
         JSONObject jsonObject = JSON.parseObject(s);
         imageDownBean.setKeyValue(jsonObject.getString("pid"));
         imageDownBean.setImageUrl(jsonObject.getString(imageDownBean.getImageFieldName()));
-        String json = JSON.toJSONString(imageDownBean);
-        // 测输出流发送下游任务下载图片
-        context.output(outputTag, json);
+        // 测输出流发送下游图片下载任务信息
+        context.output(outputTag, imageDownBean);
         collector.collect(Document.parse(s));
     }
 
-    public ImageDownAndDocumentProcessFunction(BaseExpressionContext context, OutputTag<String> outputTag, ImageDownBean imageDownBean) {
+    public ImageDownAndDocumentProcessFunction(BaseExpressionContext context, OutputTag<ImageDownBean> outputTag, ImageDownBean imageDownBean) {
         this.context = context;
         this.outputTag = outputTag;
         this.imageDownBean = imageDownBean;
